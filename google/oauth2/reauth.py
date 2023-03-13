@@ -37,6 +37,7 @@ import sys
 from six.moves import range
 
 from google.auth import exceptions
+from google.auth import metrics
 from google.oauth2 import _client
 from google.oauth2 import challenges
 
@@ -51,6 +52,12 @@ _REAUTH_NEEDED_ERROR_RAPT_REQUIRED = "rapt_required"
 _AUTHENTICATED = "AUTHENTICATED"
 _CHALLENGE_REQUIRED = "CHALLENGE_REQUIRED"
 _CHALLENGE_PENDING = "CHALLENGE_PENDING"
+
+_API_CLIENT_HEADER_FOR_REAUTH = {
+    metrics.API_CLIENT_HEADER: metrics.create_header_reauth()
+}
+
+_API_CLIENT_HEADER_FOR_USER = {metrics.API_CLIENT_HEADER: metrics.create_header_user()}
 
 
 # Override this global variable to set custom max number of rounds of reauth
@@ -96,7 +103,12 @@ def _get_challenges(
         body["oauthScopesForDomainPolicyLookup"] = requested_scopes
 
     return _client._token_endpoint_request(
-        request, _REAUTH_API + ":start", body, access_token=access_token, use_json=True
+        request,
+        _REAUTH_API + ":start",
+        body,
+        access_token=access_token,
+        use_json=True,
+        extra_headers=_API_CLIENT_HEADER_FOR_REAUTH,
     )
 
 
@@ -130,6 +142,7 @@ def _send_challenge_result(
         body,
         access_token=access_token,
         use_json=True,
+        extra_headers=_API_CLIENT_HEADER_FOR_REAUTH,
     )
 
 
@@ -263,6 +276,7 @@ def get_rapt_token(
         refresh_token=refresh_token,
         token_uri=token_uri,
         scopes=[_REAUTH_SCOPE],
+        extra_headers=_API_CLIENT_HEADER_FOR_REAUTH,
     )
 
     # Get rapt token from reauth API.
@@ -322,7 +336,7 @@ def refresh_grant(
         body["rapt"] = rapt_token
 
     response_status_ok, response_data, retryable_error = _client._token_endpoint_request_no_throw(
-        request, token_uri, body
+        request, token_uri, body, extra_headers=_API_CLIENT_HEADER_FOR_USER
     )
     if (
         not response_status_ok
@@ -345,7 +359,9 @@ def refresh_grant(
             response_status_ok,
             response_data,
             retryable_error,
-        ) = _client._token_endpoint_request_no_throw(request, token_uri, body)
+        ) = _client._token_endpoint_request_no_throw(
+            request, token_uri, body, extra_headers=_API_CLIENT_HEADER_FOR_USER
+        )
 
     if not response_status_ok:
         _client._handle_error_response(response_data, retryable_error)

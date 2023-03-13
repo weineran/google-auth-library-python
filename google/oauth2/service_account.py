@@ -78,6 +78,7 @@ from google.auth import _service_account_info
 from google.auth import credentials
 from google.auth import exceptions
 from google.auth import jwt
+from google.auth import metrics
 from google.oauth2 import _client
 
 _DEFAULT_TOKEN_LIFETIME_SECS = 3600  # 1 hour in seconds
@@ -421,9 +422,12 @@ class Credentials(
             self.token = self._jwt_credentials.token
             self.expiry = self._jwt_credentials.expiry
         else:
+            api_client_header = {
+                metrics.API_CLIENT_HEADER: metrics.create_header_sa_assertion_access_token()
+            }
             assertion = self._make_authorization_grant_assertion()
             access_token, expiry, _ = _client.jwt_grant(
-                request, self._token_uri, assertion
+                request, self._token_uri, assertion, extra_headers=api_client_header
             )
             self.token = access_token
             self.expiry = expiry
@@ -779,9 +783,12 @@ class IDTokenCredentials(
         if self._use_iam_endpoint:
             self._refresh_with_iam_endpoint(request)
         else:
+            api_client_header = {
+                metrics.API_CLIENT_HEADER: metrics.create_header_sa_assertion_id_token()
+            }
             assertion = self._make_authorization_grant_assertion()
             access_token, expiry, _ = _client.id_token_jwt_grant(
-                request, self._token_uri, assertion
+                request, self._token_uri, assertion, extra_headers=api_client_header
             )
             self.token = access_token
             self.expiry = expiry

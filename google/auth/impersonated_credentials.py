@@ -37,6 +37,7 @@ from google.auth import _helpers
 from google.auth import credentials
 from google.auth import exceptions
 from google.auth import jwt
+from google.auth import metrics
 
 _DEFAULT_TOKEN_LIFETIME_SECS = 3600  # 1 hour in seconds
 
@@ -60,8 +61,6 @@ _IAM_IDTOKEN_ENDPOINT = (
 _REFRESH_ERROR = "Unable to acquire impersonated credentials"
 
 _DEFAULT_TOKEN_LIFETIME_SECS = 3600  # 1 hour in seconds
-
-_DEFAULT_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
 
 def _make_iam_token_request(
@@ -261,7 +260,10 @@ class Credentials(
             "lifetime": str(self._lifetime) + "s",
         }
 
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            metrics.API_CLIENT_HEADER: metrics.create_header_sa_impersonate_access_token(),
+        }
 
         # Apply the source credentials authentication info.
         self._source_credentials.apply(headers)
@@ -422,7 +424,10 @@ class IDTokenCredentials(credentials.CredentialsWithQuotaProject):
             "includeEmail": self._include_email,
         }
 
-        headers = {"Content-Type": "application/json"}
+        headers = {
+            "Content-Type": "application/json",
+            metrics.API_CLIENT_HEADER: metrics.create_header_sa_impersonate_id_token(),
+        }
 
         authed_session = AuthorizedSession(
             self._target_credentials._source_credentials, auth_request=request

@@ -28,6 +28,7 @@ from google.auth import credentials
 from google.auth import exceptions
 from google.auth import iam
 from google.auth import jwt
+from google.auth import metrics
 from google.auth.compute_engine import _metadata
 from google.oauth2 import _client
 
@@ -374,7 +375,12 @@ class IDTokenCredentials(
         try:
             path = "instance/service-accounts/default/identity"
             params = {"audience": self._target_audience, "format": "full"}
-            id_token = _metadata.get(request, path, params=params)
+            api_client_header = {
+                metrics.API_CLIENT_HEADER: metrics.create_header_mds_id_token()
+            }
+            id_token = _metadata.get(
+                request, path, params=params, extra_headers=api_client_header
+            )
         except exceptions.TransportError as caught_exc:
             new_exc = exceptions.RefreshError(caught_exc)
             six.raise_from(new_exc, caught_exc)

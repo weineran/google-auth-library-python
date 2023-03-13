@@ -29,6 +29,7 @@ from six.moves.urllib import parse as urlparse
 from google.auth import _helpers
 from google.auth import environment_vars
 from google.auth import exceptions
+from google.auth import metrics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,7 +51,6 @@ _METADATA_IP_ROOT = "http://{}".format(
 )
 _METADATA_FLAVOR_HEADER = "metadata-flavor"
 _METADATA_FLAVOR_VALUE = "Google"
-_METADATA_HEADERS = {_METADATA_FLAVOR_HEADER: _METADATA_FLAVOR_VALUE}
 
 # Timeout in seconds to wait for the GCE metadata server when detecting the
 # GCE environment.
@@ -121,12 +121,16 @@ def ping(request, timeout=_METADATA_DEFAULT_TIMEOUT, retry_count=3):
     #       the metadata resolution was particularly slow. The latter case is
     #       "unlikely".
     retries = 0
+    headers_for_ping = {
+        _METADATA_FLAVOR_HEADER: _METADATA_FLAVOR_VALUE,
+        metrics.API_CLIENT_HEADER: metrics.create_header_mds_ping(),
+    }
     while retries < retry_count:
         try:
             response = request(
                 url=_METADATA_IP_ROOT,
                 method="GET",
-                headers=_METADATA_HEADERS,
+                headers=headers_for_ping,
                 timeout=timeout,
             )
 
@@ -150,7 +154,13 @@ def ping(request, timeout=_METADATA_DEFAULT_TIMEOUT, retry_count=3):
 
 
 def get(
-    request, path, root=_METADATA_ROOT, params=None, recursive=False, retry_count=5
+    request,
+    path,
+    root=_METADATA_ROOT,
+    params=None,
+    recursive=False,
+    retry_count=5,
+    extra_headers={},
 ):
     """Fetch a resource from the metadata server.
 
@@ -167,6 +177,8 @@ def get(
             details.
         retry_count (int): How many times to attempt connecting to metadata
             server using above timeout.
+        extra_headers (Dict[str, str]): Additional headers besides
+            {"metadata-flavor": "Google"}
 
     Returns:
         Union[Mapping, str]: If the metadata server returns JSON, a mapping of
@@ -186,9 +198,11 @@ def get(
     url = _helpers.update_query(base_url, query_params)
 
     retries = 0
+    headers = {_METADATA_FLAVOR_HEADER: _METADATA_FLAVOR_VALUE}
+    headers.update(extra_headers)
     while retries < retry_count:
         try:
-            response = request(url=url, method="GET", headers=_METADATA_HEADERS)
+            response = request(url=url, method="GET", headers=headers)
             break
 
         except exceptions.TransportError as e:
@@ -301,7 +315,10 @@ def get_service_account_token(request, service_account="default", scopes=None):
         params = None
 
     path = "instance/service-accounts/{0}/token".format(service_account)
-    token_json = get(request, path, params=params)
+    api_client_header = {
+        metrics.API_CLIENT_HEADER: metrics.create_header_mds_access_token()
+    }
+    token_json = get(request, path, params=params, extra_headers=api_client_header)
     token_expiry = _helpers.utcnow() + datetime.timedelta(
         seconds=token_json["expires_in"]
     )
