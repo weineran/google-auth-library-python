@@ -24,6 +24,7 @@ from six.moves import reload_module
 from google.auth import _helpers
 from google.auth import environment_vars
 from google.auth import exceptions
+from google.auth import metrics
 from google.auth import transport
 from google.auth.compute_engine import _metadata
 
@@ -37,6 +38,18 @@ SMBIOS_PRODUCT_NAME_NONEXISTENT_FILE = os.path.join(
 SMBIOS_PRODUCT_NAME_NON_GOOGLE = os.path.join(
     DATA_DIR, "smbios_product_name_non_google"
 )
+PING_HEADERS = {
+    "metadata-flavor": "Google",
+    "x-goog-api-client": "{} {} auth-request-type/mds".format(
+        metrics.PYTHON_VERSION, metrics.AUTH_LIB_VERSION
+    ),
+}
+ACCESS_TOKEN_REQUEST_HEADERS = {
+    "metadata-flavor": "Google",
+    "x-goog-api-client": "{} {} auth-request-type/at cred-type/mds".format(
+        metrics.PYTHON_VERSION, metrics.AUTH_LIB_VERSION
+    ),
+}
 
 
 def make_request(data, status=http_client.OK, headers=None, retry=False):
@@ -95,7 +108,7 @@ def test_ping_success():
     request.assert_called_once_with(
         method="GET",
         url=_metadata._METADATA_IP_ROOT,
-        headers=_metadata._METADATA_HEADERS,
+        headers=PING_HEADERS,
         timeout=_metadata._METADATA_DEFAULT_TIMEOUT,
     )
 
@@ -108,7 +121,7 @@ def test_ping_success_retry():
     request.assert_called_with(
         method="GET",
         url=_metadata._METADATA_IP_ROOT,
-        headers=_metadata._METADATA_HEADERS,
+        headers=PING_HEADERS,
         timeout=_metadata._METADATA_DEFAULT_TIMEOUT,
     )
     assert request.call_count == 2
@@ -143,7 +156,7 @@ def test_ping_success_custom_root():
     request.assert_called_once_with(
         method="GET",
         url="http://" + fake_ip,
-        headers=_metadata._METADATA_HEADERS,
+        headers=PING_HEADERS,
         timeout=_metadata._METADATA_DEFAULT_TIMEOUT,
     )
 
@@ -354,7 +367,7 @@ def test_get_service_account_token(utcnow):
     request.assert_called_once_with(
         method="GET",
         url=_metadata._METADATA_ROOT + PATH + "/token",
-        headers=_metadata._METADATA_HEADERS,
+        headers=ACCESS_TOKEN_REQUEST_HEADERS,
     )
     assert token == "token"
     assert expiry == utcnow() + datetime.timedelta(seconds=ttl)
@@ -373,7 +386,7 @@ def test_get_service_account_token_with_scopes_list(utcnow):
     request.assert_called_once_with(
         method="GET",
         url=_metadata._METADATA_ROOT + PATH + "/token" + "?scopes=foo%2Cbar",
-        headers=_metadata._METADATA_HEADERS,
+        headers=ACCESS_TOKEN_REQUEST_HEADERS,
     )
     assert token == "token"
     assert expiry == utcnow() + datetime.timedelta(seconds=ttl)
@@ -392,7 +405,7 @@ def test_get_service_account_token_with_scopes_string(utcnow):
     request.assert_called_once_with(
         method="GET",
         url=_metadata._METADATA_ROOT + PATH + "/token" + "?scopes=foo%2Cbar",
-        headers=_metadata._METADATA_HEADERS,
+        headers=ACCESS_TOKEN_REQUEST_HEADERS,
     )
     assert token == "token"
     assert expiry == utcnow() + datetime.timedelta(seconds=ttl)

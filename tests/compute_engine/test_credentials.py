@@ -21,6 +21,7 @@ import responses  # type: ignore
 from google.auth import _helpers
 from google.auth import exceptions
 from google.auth import jwt
+from google.auth import metrics
 from google.auth import transport
 from google.auth.compute_engine import credentials
 from google.auth.transport import requests
@@ -42,6 +43,14 @@ SAMPLE_ID_TOKEN = (
     b"ozJ0yf5grjN6AslN4OGvAv1pS-_Ko_pGBS6IQtSBC6vVKCUuBfaqNjykg"
     b"bsxbLa6Fp0SYeYwO8ifEnkRvasVpc1WTQqfRB2JCj5pTBDzJpIpFCMmnQ"
 )
+
+
+ID_TOKEN_REQUEST_HEADERS = {
+    "metadata-flavor": "Google",
+    "x-goog-api-client": "{} {} auth-request-type/it cred-type/mds".format(
+        metrics.PYTHON_VERSION, metrics.AUTH_LIB_VERSION
+    ),
+}
 
 
 class TestCredentials(object):
@@ -133,7 +142,7 @@ class TestCredentials(object):
         assert self.credentials.valid
 
         kwargs = get.call_args[1]
-        assert kwargs == {"params": {"scopes": "three,four"}}
+        assert kwargs["params"] == {"scopes": "three,four"}
 
     @mock.patch("google.auth.compute_engine._metadata.get", autospec=True)
     def test_refresh_error(self, get):
@@ -143,6 +152,18 @@ class TestCredentials(object):
             self.credentials.refresh(None)
 
         assert excinfo.match(r"http error")
+
+    @mock.patch("google.auth.compute_engine.Credentials._retrieve_info", autospec=True)
+    @mock.patch("google.auth.compute_engine._metadata.get", autospec=True)
+    def test_access_token_metrics(self, get, retrieve_info):
+        get.side_effect = [{"access_token": "token", "expires_in": 500}]
+        self.credentials.refresh(None)
+
+        assert get.call_args.kwargs["headers"][
+            "x-goog-api-client"
+        ] == "{} {} auth-request-type/at cred-type/mds".format(
+            metrics.PYTHON_VERSION, metrics.AUTH_LIB_VERSION
+        )
 
     @mock.patch("google.auth.compute_engine._metadata.get", autospec=True)
     def test_before_request_refreshes(self, get):
@@ -164,13 +185,19 @@ class TestCredentials(object):
 
         # before_request should cause a refresh
         request = mock.create_autospec(transport.Request, instance=True)
-        self.credentials.before_request(request, "GET", "http://example.com?a=1#3", {})
+        headers = {}
+        self.credentials.before_request(
+            request, "GET", "http://example.com?a=1#3", headers
+        )
 
         # The refresh endpoint should've been called.
         assert get.called
 
         # Credentials should now be valid.
         assert self.credentials.valid
+
+        # Check the token usage metric
+        assert headers["x-goog-api-client"] == "cred-type/mds"
 
     def test_with_quota_project(self):
         quota_project_creds = self.credentials.with_quota_project("project-foo")

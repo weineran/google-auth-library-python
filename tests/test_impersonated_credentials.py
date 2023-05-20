@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import copy
 import datetime
 import json
 import os
@@ -27,6 +28,7 @@ from google.auth import _helpers
 from google.auth import crypt
 from google.auth import exceptions
 from google.auth import impersonated_credentials
+from google.auth import metrics
 from google.auth import transport
 from google.auth.impersonated_credentials import Credentials
 from google.oauth2 import credentials
@@ -414,6 +416,50 @@ class TestImpersonatedCredentials(object):
             ["fake_scope1"], default_scopes=["fake_scope2"]
         )
         assert credentials._target_scopes == ["fake_scope1"]
+
+    def test_access_token_request_metrics(self):
+        credentials = self.make_credentials()
+        credentials._source_credentials.token = "token"
+        credentials._source_credentials.expiry = None
+
+        expire_time = (
+            _helpers.utcnow().replace(microsecond=0) + datetime.timedelta(seconds=500)
+        ).isoformat("T") + "Z"
+        response_body = {"accessToken": "token", "expireTime": expire_time}
+
+        request = self.make_request(
+            data=json.dumps(response_body), status=http_client.OK
+        )
+
+        credentials.refresh(request)
+        metric_header_value = "{} {} auth-request-type/at cred-type/imp".format(
+            metrics.PYTHON_VERSION, metrics.AUTH_LIB_VERSION
+        )
+        assert (
+            request.call_args.kwargs["headers"]["x-goog-api-client"]
+            == metric_header_value
+        )
+
+    def test_id_token_request_metrics(self):
+        credentials = self.make_credentials(lifetime=None)
+        target_audience = "https://foo.bar"
+        id_creds = impersonated_credentials.IDTokenCredentials(
+            credentials, target_audience=target_audience
+        )
+
+        with mock.patch(
+            "google.auth.transport.requests.AuthorizedSession.post", autospec=True
+        ) as auth_session:
+            data = {"token": ID_TOKEN_DATA}
+            auth_session.return_value = MockResponse(data, http_client.OK)
+            id_creds.refresh(None)
+            metric_header_value = "{} {} auth-request-type/it cred-type/imp".format(
+                metrics.PYTHON_VERSION, metrics.AUTH_LIB_VERSION
+            )
+            assert (
+                auth_session.call_args.kwargs["headers"]["x-goog-api-client"]
+                == metric_header_value
+            )
 
     def test_id_token_success(
         self, mock_donor_credentials, mock_authorizedsession_idtoken
