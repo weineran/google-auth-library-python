@@ -4,6 +4,15 @@
 
 [1]: https://pypi.org/project/google-auth/#history
 
+## [2.19.0](https://github.com/googleapis/google-auth-library-python/compare/v2.18.1...v2.19.0) (2023-05-24)
+
+
+### Features
+
+* Add metrics (part 1) ([#1298](https://github.com/googleapis/google-auth-library-python/issues/1298)) ([246dd07](https://github.com/googleapis/google-auth-library-python/commit/246dd079388e21036831e2ebc7586c9f596acbec))
+* Add metrics (part 2) ([#1303](https://github.com/googleapis/google-auth-library-python/issues/1303)) ([ebd5af7](https://github.com/googleapis/google-auth-library-python/commit/ebd5af7d372d4cde892601138de282217586135f))
+* Expose `universe_domain` for external account creds ([#1296](https://github.com/googleapis/google-auth-library-python/issues/1296)) ([ee07053](https://github.com/googleapis/google-auth-library-python/commit/ee070535ce06661eeb12e407e782c155b142cecf))
+
 ## [2.18.1](https://github.com/googleapis/google-auth-library-python/compare/v2.18.0...v2.18.1) (2023-05-17)
 
 
